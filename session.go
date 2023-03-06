@@ -135,6 +135,7 @@ func (session *Session) Close() error {
 
 		err := session.codec.Close()
 		go func() {
+			session.invokeCloseCallbacks()
 			if session.manager != nil {
 				session.manager.delSession(session)
 			}
