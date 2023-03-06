@@ -34,7 +34,9 @@ func (codec *ProtocolCodec) Send(msg interface{}) error {
 	if err != nil {
 		return err
 	}
-	_, _ = codec.w.Write(marshal)
+	if _, err = codec.w.Write(marshal); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -48,7 +50,7 @@ func (codec *ProtocolCodec) Receive() (interface{}, error) {
 		return nil, err
 	}
 
-	var buff [128]byte
+	var buff [256]byte
 	for {
 		count, err := io.ReadAtLeast(codec.r, buff[:], 1)
 		if err != nil {
@@ -59,8 +61,8 @@ func (codec *ProtocolCodec) Receive() (interface{}, error) {
 		if codec.buffReceiving.Len() == 0 {
 			continue
 		}
-		fmt.Println(codec.buffReceiving.Len(), 0xffff)
-		if codec.buffReceiving.Len() > 256 {
+		fmt.Println(codec.buffReceiving.Len(), 128)
+		if codec.buffReceiving.Len() > 128 {
 			return nil, errors.New("数据太长")
 		}
 
@@ -119,7 +121,7 @@ type sessionHandler struct {
 
 func (handler sessionHandler) HandlerSession(session *Session) {
 	for {
-		msg, err := session.codec.Receive()
+		msg, err := session.Receive()
 		if err != nil {
 			session.Close()
 			fmt.Println(err.Error())
