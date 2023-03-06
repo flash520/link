@@ -28,9 +28,11 @@ type Session struct {
 	recvMutex sync.Mutex
 	sendMutex sync.RWMutex
 
-	closeFlag  int32
-	closeChan  chan int
-	closeMutex sync.RWMutex
+	closeFlag          int32
+	closeChan          chan int
+	closeMutex         sync.RWMutex
+	firstCloseCallback *closeCallback
+	lastCloseCallback  *closeCallback
 }
 
 func NewSession(codec Codec, sendChanSize int) *Session {
@@ -141,4 +143,65 @@ func (session *Session) Close() error {
 	}
 
 	return SessionClosedError
+}
+
+type closeCallback struct {
+	Handler interface{}
+	Key     interface{}
+	Func    func()
+	Next    *closeCallback
+}
+
+// AddCloseCallback 添加关闭回调函数
+func (session *Session) AddCloseCallback(handler, key interface{}, callback func()) {
+	if session.IsClosed() {
+		return
+	}
+
+	session.closeMutex.Lock()
+	defer session.closeMutex.Unlock()
+
+	newItem := &closeCallback{handler, key, callback, nil}
+
+	if session.firstCloseCallback == nil {
+		session.firstCloseCallback = newItem
+	} else {
+		session.lastCloseCallback.Next = newItem
+	}
+	session.lastCloseCallback = newItem
+}
+
+// RemoveCloseCallback 移除关闭回调函数
+func (session *Session) RemoveCloseCallback(handler, key interface{}) {
+	if session.IsClosed() {
+		return
+	}
+
+	session.closeMutex.Lock()
+	defer session.closeMutex.Unlock()
+
+	var prev *closeCallback
+	for callback := session.firstCloseCallback; callback != nil; prev, callback = callback, callback.Next {
+		if callback.Handler == handler && callback.Key == key {
+			if session.firstCloseCallback == callback {
+				session.firstCloseCallback = callback.Next
+			} else {
+				prev.Next = callback.Next
+			}
+			if session.lastCloseCallback == callback {
+				session.lastCloseCallback = prev
+			}
+			return
+		}
+	}
+}
+
+// invokeCloseCallbacks 回调关闭函数
+func (session *Session) invokeCloseCallbacks() {
+	session.closeMutex.Lock()
+	defer session.closeMutex.Unlock()
+
+	for callback := session.firstCloseCallback; callback != nil; callback = callback.Next {
+		callback.Func()
+	}
 }
