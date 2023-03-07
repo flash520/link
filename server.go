@@ -19,14 +19,14 @@ type Server struct {
 }
 
 type Handler interface {
-	HandlerSession(session *Session)
+	HandleSession(session *Session)
 }
 
 var _ = HandlerFunc(nil)
 
 type HandlerFunc func(session *Session)
 
-func (f HandlerFunc) HandlerSession(session *Session) {
+func (f HandlerFunc) HandleSession(session *Session) {
 	f(session)
 }
 
@@ -54,7 +54,7 @@ func (server *Server) Serve() error {
 				return
 			}
 			session := server.manager.NewSession(codec, server.sendChanSize)
-			server.handler.HandlerSession(session)
+			server.handler.HandleSession(session)
 		}()
 	}
 }
